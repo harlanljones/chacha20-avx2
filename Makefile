@@ -50,14 +50,17 @@ obj/bench-main.o: bench/bench.c include/ref.h
 	@mkdir -p $(dir $@)
 	$(CC) $(BENCH_CFLAGS) -Iinclude -c -o $@ $<
 
-test: bin/test-vectors bin/abi-test bin/test-asm
-	./bin/test-vectors && ./bin/abi-test && ./bin/test-asm
+test: bin/test-vectors bin/abi-test bin/test-asm bin/test-poly-bmi2
+	./bin/test-vectors && ./bin/abi-test && ./bin/test-asm && ./bin/test-poly-bmi2
 
 $(TEST_BIN): test/rfc8439_vectors.c test/rfc_vectors_data.h $(TEST_REF_OBJ) | $(BIN)
 	$(CC) $(CFLAGS) -o $@ test/rfc8439_vectors.c $(TEST_REF_OBJ)
 
 bin/test-asm: test/chacha20_asm_vectors.c $(TEST_ASM_OBJ) | $(BIN)
 	$(CC) $(CFLAGS) -Itest -o $@ test/chacha20_asm_vectors.c $(TEST_REF_OBJ) $(TEST_ASM_OBJ)
+
+bin/test-poly-bmi2: test/poly1305_bmi2_vectors.c $(TEST_REF_OBJ) $(TEST_ASM_OBJ) | $(BIN)
+	$(CC) $(CFLAGS) -Itest -o $@ test/poly1305_bmi2_vectors.c $(TEST_REF_OBJ) $(TEST_ASM_OBJ)
 
 bin/abi-test: test/abi_test.c obj/test-abi_wrappers.o $(TEST_REF_OBJ) $(TEST_ASM_OBJ) | $(BIN)
 	$(CC) $(CFLAGS) -no-pie -o $@ test/abi_test.c obj/test-abi_wrappers.o $(TEST_REF_OBJ) $(TEST_ASM_OBJ)

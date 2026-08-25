@@ -12,6 +12,7 @@
  * control). Kernel symbols get added to this list when they land (W9).
  */
 #include "ref.h"
+#include "poly1305_bmi2.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -42,6 +43,11 @@ extern uint64_t abi_wrap_chacha20_keystream_avx2(
 extern uint64_t abi_wrap_chacha20_xor_tail_avx2(
     uint8_t *dst, const uint8_t *src, size_t len, const uint8_t key[32],
     const uint8_t nonce[12], uint32_t ctr);
+extern uint64_t abi_wrap_poly1305_init_bmi2(poly1305_ctx_bmi2 *ctx, const uint8_t key[32]);
+extern uint64_t abi_wrap_poly1305_update_bmi2(poly1305_ctx_bmi2 *ctx, const uint8_t *m, size_t n);
+extern uint64_t abi_wrap_poly1305_final_bmi2(poly1305_ctx_bmi2 *ctx, uint8_t tag[16]);
+extern uint64_t abi_wrap_poly1305_auth_bmi2(uint8_t tag[16], const uint8_t *m, size_t n, const uint8_t key[32]);
+extern uint64_t abi_wrap_poly1305_blocks_internal(poly1305_ctx_bmi2 *ctx, const uint8_t *m, size_t n, uint32_t pad);
 extern uint64_t abi_wrap_abi_violator_impl(void);
 extern uint64_t abi_wrap_abi_violator_r15_impl(void);
 
@@ -86,6 +92,14 @@ int main(void)
     CHECK(chacha20_blocks4_avx2, (buf2, buf1, buf1 + 32, 1));
     CHECK(chacha20_keystream_avx2, (buf2, buf1, buf1 + 32, 1, 4));
     CHECK(chacha20_xor_tail_avx2, (buf2, buf1, 600, buf1, buf1 + 32, 1));
+    {
+        poly1305_ctx_bmi2 bmi;
+        CHECK(poly1305_init_bmi2, (&bmi, buf1));
+        CHECK(poly1305_update_bmi2, (&bmi, buf1, 600));
+        CHECK(poly1305_final_bmi2, (&bmi, tag));
+        CHECK(poly1305_auth_bmi2, (tag, buf1, 600, buf1));
+        CHECK(poly1305_blocks_internal, (&bmi, buf1, 16, 1));
+    }
 
 #undef CHECK
 

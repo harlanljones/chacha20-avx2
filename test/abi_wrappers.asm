@@ -3,21 +3,22 @@
 ; One wrapper per exported symbol under test. Each wrapper:
 ;   1. stages incoming stack args (7th/8th) so forwarding keeps the
 ;      callee-visible layout identical to a direct C call,
-;   2. saves the caller's rbx, rbp, r12-r14 in scratch slots ABOVE the
+;   2. saves the caller's rbx, rbp, r12-r15 in scratch slots ABOVE the
 ;      callee's red-zone reach,
-;   3. poisons rbx, rbp, r12-r14 with known patterns,
+;   3. poisons rbx, rbp, r12-r15 with known patterns,
 ;   4. calls the real symbol with rsp 16-byte aligned at the call site
 ;      (callee sees rsp % 16 == 8 per System V AMD64),
 ;   5. builds a violation bitmask branchlessly in eax:
-;        bit0 rbx   bit1 rbp   bit2 r12   bit3 r13   bit4 r14
-;        bit5 direction flag set on return (ABI requires DF=0)
+;        bit0 direction flag set on return (ABI requires DF=0)
+;        bit1 rbx   bit2 rbp   bit3 r12   bit4 r13   bit5 r14   bit6 r15
 ;   6. restores the caller's registers and returns the mask.
 ;
 ; The wrapped function's return value is intentionally not forwarded;
 ; functional behavior is covered by the vector suite.
 ;
-; abi_violator_stub is a deliberate callee-saved/DF trasher used as a
-; negative control: the harness must detect bits 0 and 5 both set.
+; abi_violator_impl / abi_violator_r15_impl are deliberate
+; callee-saved/DF trashers used as negative controls: the harness must
+; detect 0x3 (DF+rbx) and 0x40 (r15) respectively.
 
 section .text
 
@@ -32,6 +33,11 @@ extern chacha20_poly1305_encrypt_ref
 extern chacha20_blocks4_avx2
 extern chacha20_keystream_avx2
 extern chacha20_xor_tail_avx2
+extern poly1305_init_bmi2
+extern poly1305_update_bmi2
+extern poly1305_final_bmi2
+extern poly1305_auth_bmi2
+extern poly1305_blocks_internal
 
 ; ---- helper macro: eax = (eax << 1) | (reg != pattern) ----
 %macro PROBE_REG 2        ; %1 = register, %2 = 64-bit pattern
@@ -68,7 +74,7 @@ abi_wrap_%1:
 
     call    %1                          ; rsp%16==0 here -> callee sees 8
 
-    ; violation mask, built msb-first so rbx lands on bit0, DF on bit5
+    ; violation mask, built msb-first so r15 lands on bit6, DF on bit0
     xor     eax, eax
     PROBE_REG r15, 0x6666666666660006
     PROBE_REG r14, 0x5555555555550005
@@ -106,6 +112,11 @@ ABI_WRAP chacha20_poly1305_encrypt_ref
 ABI_WRAP chacha20_blocks4_avx2
 ABI_WRAP chacha20_keystream_avx2
 ABI_WRAP chacha20_xor_tail_avx2
+ABI_WRAP poly1305_init_bmi2
+ABI_WRAP poly1305_update_bmi2
+ABI_WRAP poly1305_final_bmi2
+ABI_WRAP poly1305_auth_bmi2
+ABI_WRAP poly1305_blocks_internal
 
 ; Negative control. The impl is deliberately non-conforming; it is run
 ; through ABI_WRAP so the mask the test inspects is the one the detector
