@@ -1,0 +1,11 @@
+# build outputs
+/bin/
+/obj/
+
+# generated fuzz corpora
+/fuzz/corpus/
+*.zip
+
+# editor / OS noise
+*.o
+*.a
