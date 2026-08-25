@@ -26,7 +26,7 @@ BENCH_CSV     := bin/bench-ref.csv
 TEST_BIN      := bin/test-vectors
 TEST_REF_OBJ  := obj/ref/chacha20_ref.o obj/ref/poly1305_ref.o obj/ref/aead_ref.o
 TEST_ABI_OBJ  := obj/test-abi_wrappers.o
-TEST_ASM_OBJ  := obj/chacha20_avx2.o
+TEST_ASM_OBJ  := $(ASM_SRCS:src/%.asm=obj/%.o)
 
 BIN := bin
 

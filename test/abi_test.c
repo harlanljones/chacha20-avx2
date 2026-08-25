@@ -5,8 +5,8 @@
  * (abi_wrappers.asm) that poisons rbx/rbp/r12-r14, forwards the call
  * with ABI-correct stack layout (including the 7th/8th stack args of
  * the AEAD entry point), and reports a violation bitmask:
- *   bit0 rbx  bit1 rbp  bit2 r12  bit3 r13  bit4 r14
- *   bit5 direction flag set on return
+ *   bit0 direction flag set on return
+ *   bit1 rbx  bit2 rbp  bit3 r12  bit4 r13  bit5 r14  bit6 r15
  *
  * A deliberate violator stub proves the detector works (negative
  * control). Kernel symbols get added to this list when they land (W9).
@@ -39,7 +39,14 @@ extern uint64_t abi_wrap_chacha20_blocks4_avx2(
 extern uint64_t abi_wrap_chacha20_keystream_avx2(
     uint8_t *dst, const uint8_t key[32], const uint8_t nonce[12],
     uint32_t ctr, size_t nblocks);
-extern uint64_t abi_violator_stub(void);
+extern uint64_t abi_wrap_chacha20_xor_tail_avx2(
+    uint8_t *dst, const uint8_t *src, size_t len, const uint8_t key[32],
+    const uint8_t nonce[12], uint32_t ctr);
+extern uint64_t abi_wrap_abi_violator_impl(void);
+extern uint64_t abi_wrap_abi_violator_r15_impl(void);
+
+#define VIOL_EXPECT     0x3u   /* DF + rbx, per the probe bit order */
+#define VIOL_R15_EXPECT 0x40u  /* r15 alone */
 
 static unsigned passed, total;
 
@@ -78,13 +85,19 @@ int main(void)
           (buf2, tag, buf1, 600, buf1 + 600, 12, buf2 + 12, buf1));
     CHECK(chacha20_blocks4_avx2, (buf2, buf1, buf1 + 32, 1));
     CHECK(chacha20_keystream_avx2, (buf2, buf1, buf1 + 32, 1, 4));
+    CHECK(chacha20_xor_tail_avx2, (buf2, buf1, 600, buf1, buf1 + 32, 1));
 
 #undef CHECK
 
     /* negative control: detector must catch the deliberate violator */
     {
-        uint64_t m = abi_violator_stub();
-        report("abi_violator_detected", (m & 0x21) == 0x21); /* rbx + DF */
+        uint64_t m = abi_wrap_abi_violator_impl();
+        printf("     violator mask = 0x%llx\n", (unsigned long long)m);
+        report("abi_violator_detected", (m & VIOL_EXPECT) == VIOL_EXPECT);
+
+        m = abi_wrap_abi_violator_r15_impl();
+        printf("     r15 violator mask = 0x%llx\n", (unsigned long long)m);
+        report("abi_violator_r15_detected", m == VIOL_R15_EXPECT);
     }
 
     printf("%u/%u ABI checks passed\n", passed, total);
