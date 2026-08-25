@@ -14,7 +14,8 @@ Executable plan for building the ChaCha20-Poly1305 AVX2 kernel specified in `TDD
 - `bench/`: rdtsc/rdtscp harness with median-of-N CSV output and methodology README. **D5 ratified**: baseline comparator = `src/ref` at `-O3`. Open AC: cross-run median variance up to 14.9% observed under `powersave`; blocked on human pinning (`sudo cpupower frequency-set -g performance`).
 - Work tracker: Linear project `chacha20-avx2` (team `HJ`), tickets HJ-316…HJ-331 mirroring §8; closed so far: W1/HJ-316, W3/HJ-317, W4/HJ-320, W14/HJ-321, W6/HJ-322.
 - Host: x86_64 Linux, i7-14700K (28 cores), Arch-based Omarchy; cpufreq governor `powersave` (see R4/W5).
-- Still missing: Poly1305 engine (W8, gated by **DEC-D1/HJ-319**), tail/scalar fallback CT path (W7 — next frontier), composition/fuzz/perf-audit waves.
+- **D1/G-D1 ratified (HJ-319):** Poly1305 accumulator radix = **2^64** (3-limb accumulator h0,h1,h2 + 2-limb clamped key r0,r1, `mulx`/`adcx`/`adox`), matching TDD §3.2's `r8–r11` register map and §2.2's BMI2/ADX tooling. Options table + evidence: HJ-319 comment thread.
+- Still missing: Poly1305 engine (W8 — D1 now resolved, unblocked), tail/scalar fallback CT path (W7 — next frontier), composition/fuzz/perf-audit waves.
 
 
 ## 2. Objective & Scope
@@ -48,7 +49,7 @@ Executable plan for building the ChaCha20-Poly1305 AVX2 kernel specified in `TDD
 
 | ID | Decision | Why unresolved | Blocks |
 | :--- | :--- | :--- | :--- |
-| D1 | Poly1305 radix 2^26 vs 2^64 | TDD §2.2 says "Radix-2^64 **or** Radix-2^26" — ambiguous | W8 (Poly1305 engine start) |
+| D1 | ~~Poly1305 radix 2^26 vs 2^64~~ — **RATIFIED: 2^64** (HJ-319) | TDD §2.2 said "Radix-2^64 **or** Radix-2^26" — ambiguous; resolved by human decision, evidence in HJ-319 (register-map fit + mulx/adcx/adox tooling fit vs TDD §3.2/§2.2) | W8 unblocked |
 | D2 | Decrypt/tag-verify API existence & signature | Absent from TDD entirely | W10 |
 | D3 | Fuzzer: AFL++ vs libFuzzer | TDD §5.2 names both | W11 |
 | D4 | Primary differential oracle: libsodium vs OpenSSL | TDD §4/§5 name both; both installed | W11 |
@@ -135,7 +136,7 @@ One writer per owned tree at a time (AGENTS §6).
 | :--- | :--- | :--- | :--- |
 | R1 | Toolchain gap: nasm missing blocks all asm work | `nasm -v` fails at any point | W1 installs it first; if pacman unavailable, escalate to human immediately rather than substituting another assembler silently |
 | R2 | vpshufd diagonalization assumption wrong (dependency-chain latency worse than expected, or lane-crossing needs spill/reload) | W6 spike shows double-round loop slower than modeled or requires memory shuffles | Spike in W6 decides D6 with measurements; fallbacks ready early: vpermd, vpalignr chains, or memory-based shuffle tables kept in .rodata (constant-address = still CT) |
-| R3 | Poly1305 radix ambiguity blocks Phase-3-equivalent start | W8 owner reaches design time with D1 open | Resolve D1 at latest by end of M1 (gate below); interim option: implement both radices' inner loops in the C reference so the choice costs nothing extra |
+| R3 | ~~Poly1305 radix ambiguity blocks Phase-3-equivalent start~~ — **closed**: D1 ratified 2^64 before end of M1 (HJ-319) | W8 owner reaches design time with D1 open | D1 resolved; W8 may proceed with radix 2^64 |
 | R4 | rdtsc noise invalidates comparisons (turbo, governor, core migration) | Repeated identical runs vary beyond stated tolerance | W5 pins governor or fixes frequency, warms up, takes median-of-N, records conditions in CSV header; if still unstable, switch to libpfm/perf counters and re-baseline everything measured so far |
 | R5 | Fuzz oracle mismatch from framing differences (libsodium appends tag / different arg order / OpenSSL EVP context setup) rather than real bugs | W11 mismatches that reproduce identically for the C reference too | Build the framing adapter against the C reference FIRST; only then point the same adapter at the kernel; treat reference-vs-oracle mismatches as harness bugs, not kernel bugs |
 | R6 | Single-maintainer schedule slip (waves serialize unexpectedly) | Any wave blocked > its slack on a predecessor | Waves are deliberately independent (§7); if serialization is forced, cut scope at W10 (D2 likely declines anyway) and W13's matrix size, never at W4/W11 coverage |
@@ -148,7 +149,7 @@ Each gate names the decision, who resolves it, and the deadline in terms of bloc
 
 | Gate | Decision | Must be resolved by | Blocked item |
 | :--- | :--- | :--- | :--- |
-| G-D1 | Poly1305 radix 2^26 vs 2^64 (TDD §2.2 ambiguity) | End of M1 — before W8 writes engine code | W8 |
+| G-D1 | Poly1305 radix 2^26 vs 2^64 (TDD §2.2 ambiguity) — **RATIFIED: 2^64**, evidence in HJ-319 (register-map fit, mulx/adcx/adox fit, throughput) | End of M1 — before W8 writes engine code | W8 unblocked |
 | G-D2 | Whether decrypt/tag-verify exists, and its exact signature (absent from TDD) | Before M5 planning — W9 leaves room either way | W10 |
 | G-D3 | AFL++ vs libFuzzer (TDD §5.2 lists both) | Start of W11 | W11 |
 | G-D4 | Primary differential oracle: libsodium or OpenSSL (other stays secondary) | Start of W11 | W11 |
@@ -169,7 +170,7 @@ Requirement/critique source → covering work items:
 | TDD §1 | Side-channel resistance / constant time | W12 (+ every item via AGENTS §3.3) |
 | TDD §1 | Zero external runtime deps, SysV ABI | W1, W9, W14 |
 | TDD §2.1 | AVX2 4-block layout, vpshufb rotations, vpshufd diagonalization | W6 (spike→D6) |
-| TDD §2.2 | Poly1305 scalar BMI2/ADX, clamping | W8 (radix→G-D1) |
+| TDD §2.2 | Poly1305 scalar BMI2/ADX, clamping | W8 (radix→G-D1, ratified 2^64) |
 | TDD §3.1 | Exact encrypt signature incl. stack-passed nonce/key | W9, W14 |
 | TDD §3.1 omissions | Aliasing/in-place, error codes, length caps unspecified | D8/G-D8, W9 |
 | TDD §3.2 | Register allocation map (internally inconsistent — see R8) | W6 design resolution + R8; escalate if unresolvable by interpretation |
