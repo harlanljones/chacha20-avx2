@@ -2,13 +2,20 @@
 
 Executable plan for building the ChaCha20-Poly1305 AVX2 kernel specified in `TDD.md`. Process rules live in `AGENTS.md`; design decisions live in `TDD.md`. This file owns: current state, scope, metrics, milestones, work items, risks, and decision gates.
 
-## 1. Current State (verified)
+## 1. Current State (verified, updated after W6 close)
 
-- Greenfield repository: `TDD.md` is the only file. No source, no build system, no git history, no test/bench artifacts.
-- Host: x86_64 Linux, 28 cores, Arch-based Omarchy.
-- CPU features verified in `/proc/cpuinfo`: `avx2`, `bmi2`, `adx` — the full ISA set the TDD assumes.
-- Installed and verified via pkg-config: gcc, clang, make, git; libsodium 1.0.22; OpenSSL 3.6.3.
-- **Gap:** `nasm` is NOT installed. `cmake` is NOT installed and must stay out of the build (`AGENTS.md` §2). Installing nasm is work item W1.
+**Milestones achieved: M0 ✅ M1 ✅ M3 ✅ (core) · M2 partial (W5 harness built, variance AC pending governor pin).**
+
+- Repository initialized (git, branch `main`); `.gitignore` covers `bin/`, `obj/`, corpora; directory skeleton in place (`src/`, `include/`, `test/`, `bench/`, `oracle/`); nasm **3.02-1** installed and verified (`nasm -v`; AGENTS §2 ASFLAGS smoke-tested on the 3.x major bump).
+- Top-level `Makefile` satisfies the AGENTS §2 contract; `make all && make clean` green.
+- `src/ref/` + `include/ref.h`: portable scalar C reference incl. RFC 8439 §2.6 OTK derivation (**G-D7 ratified**). Differentially validated vs libsodium: 312/312 AEAD execs, 0 mismatches at generation/validation time.
+- `test/`: RFC 8439 vector suite (24 cases incl. AAD-only, zero-length, tails 0…600), ABI conformance probes (callee-saved GPRs + DF + negative control, now covering reference AND asm exports), asm validation suite (A.1 through the 4-block core; keystream differential vs reference, lengths 0…600).
+- `src/chacha20_avx2.asm`: AVX2 4-block ChaCha20 core + keystream driver. **D6 closed with measurements**: shuffle-based diagonalization rejected (+14–16% cost via interleaved A/B proxy). **R8 resolved by interpretation** (w0–w13 resident, w14/w15 slot-staged, ymm15 rotate scratch, init spilled once — documented in file header).
+- `bench/`: rdtsc/rdtscp harness with median-of-N CSV output and methodology README. **D5 ratified**: baseline comparator = `src/ref` at `-O3`. Open AC: cross-run median variance up to 14.9% observed under `powersave`; blocked on human pinning (`sudo cpupower frequency-set -g performance`).
+- Work tracker: Linear project `chacha20-avx2` (team `HJ`), tickets HJ-316…HJ-331 mirroring §8; closed so far: W1/HJ-316, W3/HJ-317, W4/HJ-320, W14/HJ-321, W6/HJ-322.
+- Host: x86_64 Linux, i7-14700K (28 cores), Arch-based Omarchy; cpufreq governor `powersave` (see R4/W5).
+- Still missing: Poly1305 engine (W8, gated by **DEC-D1/HJ-319**), tail/scalar fallback CT path (W7 — next frontier), composition/fuzz/perf-audit waves.
+
 
 ## 2. Objective & Scope
 
@@ -67,10 +74,10 @@ Baselines do not exist yet (no code). TBD entries are filled by the owning work 
 
 Effort hints in parentheses come from TDD §4's day bands and are estimates only; gates are the binding criteria.
 
-- **M0 — Bootstrap complete.** Exit: git repo initialized; `.gitignore` covers `bin/`, `obj/`, generated corpora; directory skeleton exists (`src/`, `include/`, `test/`, `bench/`, `oracle/`); nasm installed and verified; top-level `Makefile` satisfies the AGENTS §2 contract; `make all` builds an empty-but-valid skeleton; `make clean` works. (≈ TDD Day 1 slice)
-- **M1 — Reference correctness.** Exit: C reference ChaCha20-Poly1305 in `src/ref/` passes the full checked-in RFC 8439 Appendix A suite via `make test`; vector suite covers block function, Poly1305, and combined AEAD cases incl. AAD-only and zero-length inputs; ABI preservation test exists and passes against the reference calling convention. (TDD Days 1–3)
-- **M2 — Measurement online.** Exit: `make bench` produces a machine-readable CSV with cycles/byte for the C reference across the payload-length matrix; frequency-handling policy implemented and documented in the harness README/output header; D5 resolved (baseline comparator named). (TDD Days 2–3)
-- **M3 — ChaCha20 AVX2 core validated.** Exit: assembly ChaCha20 block function passes its App A block-function vectors through the same `make test` runner; keystream differential-matches reference for lengths spanning 0–600+ bytes; diagonalization strategy decided (D6 closed by spike evidence). (TDD Days 4–8)
+- **M0 — Bootstrap complete. ✅ ACHIEVED (HJ-316)** Exit: git repo initialized; `.gitignore` covers `bin/`, `obj/`, generated corpora; directory skeleton exists (`src/`, `include/`, `test/`, `bench/`, `oracle/`); nasm installed and verified; top-level `Makefile` satisfies the AGENTS §2 contract; `make all` builds an empty-but-valid skeleton; `make clean` works. (≈ TDD Day 1 slice)
+- **M1 — Reference correctness. ✅ ACHIEVED (HJ-317, HJ-320, HJ-321)** Exit: C reference ChaCha20-Poly1305 in `src/ref/` passes the full checked-in RFC 8439 Appendix A suite via `make test`; vector suite covers block function, Poly1305, and combined AEAD cases incl. AAD-only and zero-length inputs; ABI preservation test exists and passes against the reference calling convention. (TDD Days 1–3)
+- **M2 — Measurement online. ◐ PARTIAL (harness + CSV live, HJ-318; variance AC pending governor pin)** Exit: `make bench` produces a machine-readable CSV with cycles/byte for the C reference across the payload-length matrix; frequency-handling policy implemented and documented in the harness README/output header; D5 resolved (baseline comparator named). (TDD Days 2–3)
+- **M3 — ChaCha20 AVX2 core validated. ✅ CORE ACHIEVED (HJ-322); W7 CT tail still open** Exit: assembly ChaCha20 block function passes its App A block-function vectors through the same `make test` runner; keystream differential-matches reference for lengths spanning 0–600+ bytes; diagonalization strategy decided (D6 closed by spike evidence). (TDD Days 4–8)
 - **M4 — Poly1305 engine validated.** Exit: scalar BMI2/ADX Poly1305 passes App A authenticator vectors; matches reference tag output across fuzzed message lengths; D1 resolved before first line of engine code. (TDD Days 9–12)
 - **M5 — AEAD integrated.** Exit: `chacha20_poly1305_encrypt` (full composition incl. D7 KDF wiring and tail/fallback paths) passes the complete vector suite and full-length-matrix differential comparison; ABI gate green. (TDD Days 13–16)
 - **M6 — Hardened & measured.** Exit: fuzz harness running against chosen oracle(s) with 0 crashes over the agreed soak; constant-time audit checklist completed in writing; final cycles/byte CSV recorded vs C baseline; all §5 metrics reviewed and reported per AGENTS §7. (post-TDD close-out)

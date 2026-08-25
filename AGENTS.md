@@ -17,14 +17,7 @@ Instruction precedence: `TDD.md` is the technical spec → `AGENTS.md` governs p
 
 ## 2. Environment & Toolchain
 
-Verified host facts (do not re-assume differently): x86_64 Linux (Arch-based Omarchy), CPU exposes `avx2`, `bmi2`, `adx`; gcc, clang, make, pkg-config, git are installed; libsodium and OpenSSL dev packages are available to pkg-config. **`nasm` and `cmake` are NOT installed; cmake must stay out of the build.**
-
-Install prerequisites (required before any assembly compiles; verify after installing):
-
-```sh
-sudo pacman -S nasm      # Arch/Omarchy
-nasm -v                  # verify installation
-```
+Verified host facts (do not re-assume differently): x86_64 Linux (Arch-based Omarchy), i7-14700K, CPU exposes `avx2`, `bmi2`, `adx`; gcc, clang, make, pkg-config, git are installed; libsodium and OpenSSL dev packages are available to pkg-config. **`nasm` 3.02-1 is INSTALLED and verified** (flag contract smoke-tested on the 3.x major bump); **`cmake` must stay out of the build.** cpufreq governor defaults to `powersave` — pin to `performance` (sudo) before trusting absolute benchmark numbers.
 
 Assembler/linker invocation pattern:
 
@@ -34,15 +27,16 @@ gcc -o bin/app obj/foo.o obj/main.o ...              # link: prefer gcc as linke
                                                      # plain ld only for freestanding tests
 ```
 
-Build system contract: no Makefile exists yet. The first implementation task (bootstrap in `ROADMAP.md`) MUST create a top-level `Makefile` satisfying this contract, and every later task must keep it passing:
+Build system contract: a top-level `Makefile` satisfying this contract EXISTS (created by W1/HJ-316); every later task must keep it passing:
 
-- Targets: `all` (build kernel objects + harness binaries), `test` (run RFC 8439 Appendix A vector suite), `bench` (build/run benchmark harness), `clean`.
+- Targets: `all` (build kernel objects + harness binaries), `test` (runs three suites: RFC 8439 vectors `bin/test-vectors`, ABI probes `bin/abi-test`, asm validation `bin/test-asm`), `bench` (build/run benchmark harness → `bin/bench-ref.csv`), `clean`.
 - Variables: `CC=gcc`, `AS=nasm`.
-- `CFLAGS`: optimization (`-O2` minimum; benchmark builds may use `-O3`) plus ISA flags matching the verified hardware: `-mavx2 -mbmi2 -madx`.
-- `ASFLAGS`: `-f elf64` plus debug info (`-g -F dwarf` or equivalent DWARF output).
+- `CFLAGS`: `-O2 -Iinclude -mavx2 -mbmi2 -madx`; benchmark builds use `-O3 -Iinclude -mavx2 -mbmi2 -madx` (D5 baseline comparator must be measured at -O3).
+- `ASFLAGS`: `-f elf64 -g -F dwarf`.
+- Recorded deviations: `-no-pie` on the ABI test link only (fixed-address probe harness); bench objects compiled separately (`obj/bench-*`) so -O3 never leaks into non-bench builds.
 - Keep flag choices minimal and justified; do not add warning-suppression or convenience flags without recording why.
 
-Do not fabricate paths or targets beyond this contract; until an artifact exists, creating it is part of the owning task, after which keeping it green is everyone's job.
+Do not fabricate paths or targets beyond this contract; keeping it green is everyone's job.
 
 ## 3. Quality Gates (every change must pass)
 
