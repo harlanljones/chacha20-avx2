@@ -48,6 +48,10 @@ extern uint64_t abi_wrap_poly1305_update_bmi2(poly1305_ctx_bmi2 *ctx, const uint
 extern uint64_t abi_wrap_poly1305_final_bmi2(poly1305_ctx_bmi2 *ctx, uint8_t tag[16]);
 extern uint64_t abi_wrap_poly1305_auth_bmi2(uint8_t tag[16], const uint8_t *m, size_t n, const uint8_t key[32]);
 extern uint64_t abi_wrap_poly1305_blocks_internal(poly1305_ctx_bmi2 *ctx, const uint8_t *m, size_t n, uint32_t pad);
+extern uint64_t abi_wrap_chacha20_poly1305_encrypt(
+    uint8_t *ct, uint8_t tag[16], const uint8_t *pt, size_t ptlen,
+    const uint8_t *aad, size_t aadlen,
+    const uint8_t nonce[12], const uint8_t key[32]);
 extern uint64_t abi_wrap_abi_violator_impl(void);
 extern uint64_t abi_wrap_abi_violator_r15_impl(void);
 
@@ -100,6 +104,8 @@ int main(void)
         CHECK(poly1305_auth_bmi2, (tag, buf1, 600, buf1));
         CHECK(poly1305_blocks_internal, (&bmi, buf1, 16, 1));
     }
+    CHECK(chacha20_poly1305_encrypt,
+          (buf2, tag, buf1, 600, buf1 + 600, 12, buf2 + 12, buf1));
 
 #undef CHECK
 

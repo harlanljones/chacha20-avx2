@@ -214,6 +214,7 @@ poly1305_blocks_internal:
     mov [r12+CTX_H1], r9
     mov [r12+CTX_H2], r10
 .done:
+    vzeroupper
     add rsp, 80
     pop r15
     pop r14

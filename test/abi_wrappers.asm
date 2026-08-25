@@ -38,6 +38,7 @@ extern poly1305_update_bmi2
 extern poly1305_final_bmi2
 extern poly1305_auth_bmi2
 extern poly1305_blocks_internal
+extern chacha20_poly1305_encrypt
 
 ; ---- helper macro: eax = (eax << 1) | (reg != pattern) ----
 %macro PROBE_REG 2        ; %1 = register, %2 = 64-bit pattern
@@ -117,6 +118,7 @@ ABI_WRAP poly1305_update_bmi2
 ABI_WRAP poly1305_final_bmi2
 ABI_WRAP poly1305_auth_bmi2
 ABI_WRAP poly1305_blocks_internal
+ABI_WRAP chacha20_poly1305_encrypt
 
 ; Negative control. The impl is deliberately non-conforming; it is run
 ; through ABI_WRAP so the mask the test inspects is the one the detector
