@@ -37,6 +37,9 @@ extern uint64_t abi_wrap_chacha20_poly1305_encrypt_ref(
 extern uint64_t abi_wrap_chacha20_blocks4_avx2(
     uint8_t dst[256], const uint8_t key[32], const uint8_t nonce[12],
     uint32_t ctr);
+extern uint64_t abi_wrap_chacha20_blocks8_avx2(
+    uint8_t dst[512], const uint8_t key[32], const uint8_t nonce[12],
+    uint32_t ctr);
 extern uint64_t abi_wrap_chacha20_keystream_avx2(
     uint8_t *dst, const uint8_t key[32], const uint8_t nonce[12],
     uint32_t ctr, size_t nblocks);
@@ -94,6 +97,7 @@ int main(void)
     CHECK(chacha20_poly1305_encrypt_ref,
           (buf2, tag, buf1, 600, buf1 + 600, 12, buf2 + 12, buf1));
     CHECK(chacha20_blocks4_avx2, (buf2, buf1, buf1 + 32, 1));
+    CHECK(chacha20_blocks8_avx2, (buf2, buf1, buf1 + 32, 1));
     CHECK(chacha20_keystream_avx2, (buf2, buf1, buf1 + 32, 1, 4));
     CHECK(chacha20_xor_tail_avx2, (buf2, buf1, 600, buf1, buf1 + 32, 1));
     {

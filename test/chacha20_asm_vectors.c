@@ -203,6 +203,24 @@ int main(void)
         }
     }
 
+    /* keystream must not write past nblocks*64 (regression: rem tail copy). */
+    {
+        static const size_t nbs[] = {1,2,3,4,5,6,7,9,10,11,12};
+        size_t bi;
+        int oob_ok = 1;
+        for (bi = 0; bi < sizeof nbs / sizeof *nbs; bi++) {
+            size_t nb = nbs[bi];
+            size_t lim = nb * 64;
+            size_t j;
+            memset(ks, 0x5A, sizeof ks);
+            chacha20_keystream_avx2(ks, mtx_key, mtx_nonce, 1, nb);
+            /* bytes [lim, lim+512) must be untouched */
+            for (j = lim; j < lim + 512 && j < sizeof ks; j++)
+                if (ks[j] != 0x5A) { oob_ok = 0; break; }
+        }
+        report("asm_ks_no_write_past_nblocks", oob_ok);
+    }
+
     w7_tail_checks();
 
     printf("%u/%u asm checks passed\n", passed, total);

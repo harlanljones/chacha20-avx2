@@ -40,11 +40,12 @@ dw_idx: dd 0, 1, 2, 3, 4, 5, 6, 7      ; lane indices for the tail mask
 section .text
 
 extern chacha20_blocks4_avx2
+extern chacha20_blocks8_avx2
 global chacha20_xor_tail_avx2:function
 
 ; rdi=dst rsi=src rdx=len rcx=key r8=nonce r9d=counter
 ;
-; frame (after sub rsp,264): 0..255 = 256 B keystream scratch, 256..263 pad
+; frame (after sub rsp,520): 0..511 = 512 B keystream scratch, 512..519 pad
 ; keeping rsp 16-byte aligned at the inner call sites.
 chacha20_xor_tail_avx2:
     push    rbx
@@ -53,7 +54,7 @@ chacha20_xor_tail_avx2:
     push    r13
     push    r14
     push    r15
-    sub     rsp, 264
+    sub     rsp, 520
 
     mov     r12, rdi                    ; dst cursor
     mov     r13, rsi                    ; src cursor
@@ -62,8 +63,30 @@ chacha20_xor_tail_avx2:
     mov     rbp, r8                     ; nonce
     mov     r15d, r9d                   ; rolling block counter
 
-    ; ---- whole 256 B groups ----
+    ; ---- whole 512 B groups (8-block core: full register bandwidth) ----
 .groups:
+    cmp     r14, 512
+    jb      .groups256
+    lea     rdi, [rsp]
+    mov     rsi, rbx
+    mov     rdx, rbp
+    mov     ecx, r15d
+    call    chacha20_blocks8_avx2
+%assign off 0
+%rep 16
+    vmovdqu ymm1, [r13 + off]
+    vpxor   ymm1, ymm1, [rsp + off]
+    vmovdqu [r12 + off], ymm1
+%assign off off + 32
+%endrep
+    add     r12, 512
+    add     r13, 512
+    add     r15d, 8
+    sub     r14, 512
+    jmp     .groups
+
+    ; ---- whole 256 B groups (4-block core fallback) ----
+.groups256:
     cmp     r14, 256
     jb      .tail
     lea     rdi, [rsp]
@@ -82,7 +105,7 @@ chacha20_xor_tail_avx2:
     add     r13, 256
     add     r15d, 4
     sub     r14, 256
-    jmp     .groups
+    jmp     .groups256
 
     ; ---- partial group: 1..255 bytes ----
 .tail:
@@ -132,7 +155,7 @@ chacha20_xor_tail_avx2:
 .scrub:
     vpxor   ymm0, ymm0, ymm0
     lea     r10, [rsp]
-    mov     ecx, 256 / 32
+    mov     ecx, 512 / 32
 .scrubloop:
     vmovdqu [r10], ymm0
     add     r10, 32
@@ -143,7 +166,7 @@ chacha20_xor_tail_avx2:
                                         ; residue loop; do not leak it out
     vzeroupper
 
-    add     rsp, 264
+    add     rsp, 520
     pop     r15
     pop     r14
     pop     r13

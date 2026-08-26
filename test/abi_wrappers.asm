@@ -31,6 +31,7 @@ extern poly1305_final_ref
 extern poly1305_otk_ref
 extern chacha20_poly1305_encrypt_ref
 extern chacha20_blocks4_avx2
+extern chacha20_blocks8_avx2
 extern chacha20_keystream_avx2
 extern chacha20_xor_tail_avx2
 extern poly1305_init_bmi2
@@ -111,6 +112,7 @@ ABI_WRAP poly1305_final_ref
 ABI_WRAP poly1305_otk_ref
 ABI_WRAP chacha20_poly1305_encrypt_ref
 ABI_WRAP chacha20_blocks4_avx2
+ABI_WRAP chacha20_blocks8_avx2
 ABI_WRAP chacha20_keystream_avx2
 ABI_WRAP chacha20_xor_tail_avx2
 ABI_WRAP poly1305_init_bmi2
